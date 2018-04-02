@@ -20,6 +20,24 @@
         }
       },
       {
+        "package": "icu-swift",
+        "repositoryURL": "https://github.com/allevato/icu-swift.git",
+        "state": {
+          "branch": null,
+          "revision": "e66774c1f0d10f12d3961c7a8a9f2f52ba58781a",
+          "version": "0.2.0"
+        }
+      },
+      {
+        "package": "icu4c-swift",
+        "repositoryURL": "https://github.com/allevato/icu4c-swift",
+        "state": {
+          "branch": null,
+          "revision": "eb1ea105e25d17ce6481b5a3338711530b7bd13d",
+          "version": "1.0.1"
+        }
+      },
+      {
         "package": "Ogra",
         "repositoryURL": "https://github.com/edwardaux/Ogra.git",
         "state": {

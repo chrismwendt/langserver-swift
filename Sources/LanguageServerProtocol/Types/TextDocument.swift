@@ -60,8 +60,7 @@ extension TextDocument {
         self.languageId = languageId
         self.version = version
         self.text = text
-        // TODO: Force cast 🤢
-        self.lines = LineCollection(for: text)!
+        self.lines = LineCollection(for: text)
     }
 
     /// Create a new instance from the current instance, whild changing the version and text.

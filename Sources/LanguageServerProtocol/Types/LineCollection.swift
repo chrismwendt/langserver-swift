@@ -7,58 +7,78 @@
 //
 
 import Foundation
+import ICU
 
-fileprivate let lf: UInt8 = 0x0A
+extension Character {
+    var isBreak: Bool {
+        return self == "\u{0D}\u{0A}" || self == "\u{0A}"
+    }
+}
 
-fileprivate func buildLineRangeCollection(from data: Data) -> [Range<Data.Index>] {
-    var array: [Range<Data.Index>] = []
-    var lower: Data.Index = data.startIndex
-    var last: Range<Data.Index> = Range<Data.Index>(data.startIndex..<data.endIndex)
-    for (upper, datum) in data.enumerated() where datum == lf {
-        last = Range<Data.Index>(lower...upper)
-        array.append(last)
-        // The next lowest is greater than the current index
-        lower = (upper + 1)
+private struct LineIterator: IteratorProtocol {
+    
+    var cursor: LineBreakCursor
+    
+    var last: String.Index
+    
+    init(cursor: LineBreakCursor) {
+        self.cursor = cursor
+        last = self.cursor.first()
     }
-    // File does not have a trailing line-feed
-    if last.upperBound != data.endIndex {
-        let end = Range<Data.Index>(last.upperBound..<data.endIndex)
-        array.append(end)
+    
+    mutating func next() -> Range<String.Index>? {
+        while let lineBreak = cursor.next() {
+            if .hard ~= cursor.ruleStatus {
+                defer { last = lineBreak }
+                return Range(uncheckedBounds: (lower: last, upper: lineBreak))
+            } else {
+                continue
+            }
+        }
+        return nil
     }
-    return array
+    
 }
 
 struct LineCollection {
 
-    let data: Data
+    let data: String
 
-    let lines: [Range<Data.Index>]
+    let lines: [Range<String.Index>]
 
     init(for file: URL) throws {
-        data = try Data(contentsOf: file, options: .mappedIfSafe)
-        lines = buildLineRangeCollection(from: data)
+        let str = try String(contentsOf: file, encoding: .utf8)
+        self.init(for: str)
     }
 
-    init?(for string: String) {
-        guard let d = string.data(using: .utf8) else {
-            return nil
+    init(for string: String) {
+        if !string[string.index(before: string.endIndex)].isBreak {
+            data = (string + "\n")
+        } else {
+            data = string
         }
-        data = d
-        lines = buildLineRangeCollection(from: data)
+        let c = LineBreakCursor(text: data)
+        lines = Array(AnySequence({ LineIterator(cursor: c) }))
     }
 
     func byteOffset(at: Position) throws -> Int {
         guard at.line < lines.count else { throw WorkspaceError.positionNotFound }
         let lineRange = lines[at.line]
-        let offset = lineRange.lowerBound.advanced(by: at.character)
-        guard offset < lineRange.upperBound else { throw WorkspaceError.positionNotFound }
-        return offset
+        guard let index = data.index(lineRange.lowerBound, offsetBy: at.character, limitedBy: data.endIndex), index < lineRange.upperBound else {
+            throw WorkspaceError.positionNotFound
+        }
+        let utf8Index = index.samePosition(in: data.utf8)!
+        return data.utf8.distance(from: data.utf8.startIndex, to: utf8Index)
     }
 
     func position(for offset: Int) throws -> Position {
-        guard let lineIndex = lines.index(where: { $0.contains(offset) }) else { throw WorkspaceError.positionNotFound }
+        guard offset >= 0 else {
+            throw WorkspaceError.positionNotFound
+        }
+        let index = String.Index(encodedOffset: offset)
+        guard let lineIndex = lines.index(where: { $0.contains(index) }) else { throw WorkspaceError.positionNotFound }
         let lineRange = lines[lineIndex]
-        let x = offset - lineRange.lowerBound
+        let x = data.distance(from: lineRange.lowerBound, to: index)
         let position = Position(line: lineIndex, character: x)
         return position
     }
